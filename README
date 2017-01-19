@@ -1,0 +1,24 @@
+Tree-like data structure scavanger (python)
+
+The package analyzes {json8_d3.py} raw (text) data [33-55-080313.dat],
+builds keyword dictionaries for data lables [keywords_D.pickle, keyword_hash.pickle]
+and relational graph {keywords_relation.py} for those dictionaries [relational_matrix.py]
+
+What it does:
+For a(ny) given set of keywords (variabe list 'words' in json8_d3.py),
+finds all feasible paths (i.e. keyword sequences) {keywords_relation.KRe.related_paths(word)} 
+and searches data {KRe.retrieve_data(parsed_data,paths,...)}
+
+How is it done:
+keyword dictionaries 'keywords' and 'keyword_hash' are built {KRe.flat_dictionary()};
+Two types of keyword relational matrices are also built:
+    'm' is the matrix of keyword precedency 
+        m[i][j]>0 if keyword[i] precedes [j] in any of the encountered keyword sequences
+        directed 'graph': m[i][j]>0 only if m[j][i]==0, or {in json8_d3:} sum(sum(abs(m*m.T))) = 0
+    'g' is the matrix of immediate neighbours.
+        'g' would be sufficient to characterize keywords relation, if it weren't for a couple of keywords
+        that spoil the picture: 
+            they have more than one parent (i.e. upstream) keyword AND 
+            it is their parent that determines what child (i.e.downstream) keyword they have
+        This circumstance makes the relational 'graph' a higher order network (HON)
+        and this is why matrix 'm' is needed in addition to matrix 'g'
