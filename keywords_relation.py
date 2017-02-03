@@ -10,13 +10,13 @@ METHODS:
 - build_dictionaries: builds-on keyword dictionary and hash from a list of json entries ('parsed_events')
 - related_paths: finds keyword sequences associated with a keyword
 - retrieve_data: scans JSON data and retrieves data associated with given paths (i.e. keyword sequences)
-                 the retrieved data are delivered as JSON strings (the required format) with a header showing the search paths
+                 the retrieved data are delivered as JSON strings with a header showing the search paths
                  the conversion of data to numeric values is controlled by the 'to_numeric' parameter
 APPROACH: As mentioned, the raw data show that keywords are related as a tree graph (e.g. A1->A2,B2, A2->A3,B3, B2->C3,D3 ; the digits represent the layer number, the letters - nodes within a layer, the arrows - relations between nodes)
           Some exceptions, though, exist. Different branches get 'entangled' when one node belongs to different branches (e.g. A2->C3->B4, B2->C3->D4 : C3 belongs to both A2->*->B4 and B2->*->D4 paths, with no A2->*->D4 nor B2->*->B4 being allowed)
           This makes keyword relations not quite a graph, but a 'graph with memory' or a higher order network.
           Here, along with a graph-describing relational matrix 'g' that has information about nearest neighbors only,
-          a relational matrix 'm' is also employed that compiles paths (keyword sequences) information.
+          an association rules matrix 'm' is also employed that compiles paths (keyword sequences) information.
           Both matrices are computed by the keywords_relational_matrix method and employed to gather the paths associated with a given keyword
 """
 
@@ -53,7 +53,7 @@ def replace_ndcs(list_map): # replace json array indices (integers) with 'anArra
             if type(list_map[j][i])==int: 
                 changes_made.append((j,i,list_map[j][i])) ; list_map[j][i]='anArrayIndex' ; 
     return changes_made
-def json_string(name,names,values):
+def json_string(name,names,values): # make a json string from lists of corresponding names and values
     s='{"'+str(name)+'":{'
     for i in range(len(names)): s += '"'+str(names[i])+'":"'+str(values[i])+'", ' #
     s = s[:-2] + '}}\n'
@@ -63,7 +63,7 @@ class KRe(object): # keywords relations
     def __init__(self):
         self.keywords = []   # the set of keywords used in JSON data
         self.keyword_hash = {}
-        self.m = np.zeros(1) # matrix m[j,i] shows how many times j-th keyword precedes the i-th keyword
+        self.m = np.zeros(1) # matrix m[j,i] (directional) association rules: shows how many times j-th keyword precedes the i-th keyword
         self.g = np.zeros(1) # matrix g[j,i] shows if j-th keyword immediately precedes the i-th keyword
     def build_dictionaries(self, parsed_events):
         for event in parsed_events: # from each event, add-on new keywords [sequences] to dictionaries
@@ -77,7 +77,7 @@ class KRe(object): # keywords relations
                     word=str(key) # add 'key'+':' to 'nam'
                     if self.keywords.count(word)==0: # add a new word to keywords
                         self.keyword_hash[word]=len(self.keywords) ; self.keywords.append(word) ; 
-    def keywords_relational_matrix(self, parsed_events):
+    def keywords_relational_matrix(self, parsed_events): # build the association rules matrices m and g
         n=len(self.keywords); self.m=np.zeros(n*n).reshape(n,n); self.g=np.int_(self.m) # initialize relational matrices m and g
         for event in parsed_events:
             flat_map, ndcs, leafs = build_flat_map(event); replace_ndcs(flat_map)
@@ -106,7 +106,7 @@ class KRe(object): # keywords relations
                 nrps.append(len(pts)-len(xtr_ancstry))
         a=np.array(parents) ; s=np.argsort(nrps) ; seniority = list(a[s])
         return seniority # list of parents, sorted by seniority
-    def list_branches(self, path, branches): # create branches as a list of paths
+    def list_branches(self, path, branches): # build branches as a list of allowable paths
         kids = self.immediate_descendants(path)
         if kids == []: branches += [path] # other restrictions on branches can go in this 'if' statement
         else: 
@@ -126,7 +126,7 @@ class KRe(object): # keywords relations
         a = event
         for ndx in path: 
             keyword = self.keywords[ndx]
-            if keyword=='anArrayIndex': keyword=0 # this is band-aid patch, real arrays/lists needed here
+            if keyword=='anArrayIndex': keyword=0 # a band-aid patch, real arrays/lists needed here
             a = a[keyword]
         if to_numeric: a = if_float(a) #
         return a
@@ -138,13 +138,8 @@ class KRe(object): # keywords relations
         for path in paths: res.append( self.path_to_string(path) ) #
         return res
     def retrieve_data(self, parsed_events, paths, to_numeric=False): # retrieve data following specified json paths into json formats
-        ndcs = list(range(len(paths)))
-        header = json_string("header", ndcs, self.paths_to_string(paths, []))
-        retrieved = [header]
-        for event in parsed_events:
-            values = [] 
-            for path in paths: values.append( self.get_value(path, event, to_numeric) )
-            retrieved.append( json_string("event_info", ndcs, values) )
+        header = json_string("header", list(range(len(paths))), self.paths_to_string(paths, []))
+        retrieved = [header] + [ [self.get_value(path, event, to_numeric) for path in paths] for event in parsed_events]
         return retrieved
     def get_keywords(self): return self.keywords #
     def get_keyword_hash(self): return self.keyword_hash #
